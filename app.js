@@ -1360,7 +1360,7 @@
     }
 
     if (appConfig.boardAiApiEnabled && appConfig.chatApiEnabled) {
-      dom.providerBadge.textContent = `Chat: ${appConfig.model || "OpenAI"} • Board: ${getBoardAiLabel()}`;
+      dom.providerBadge.textContent = `Chat: ${appConfig.model || "Remote AI"} • Board: ${getBoardAiLabel()}`;
       return;
     }
 
@@ -1370,7 +1370,7 @@
     }
 
     if (appConfig.chatApiEnabled) {
-      dom.providerBadge.textContent = `Chat: ${appConfig.model || "OpenAI"} • Board: Local`;
+      dom.providerBadge.textContent = `Chat: ${appConfig.model || "Remote AI"} • Board: Local`;
       return;
     }
 
@@ -1422,10 +1422,10 @@
       "system",
       appConfig.apiEnabled
         ? appConfig.boardAiApiEnabled
-          ? `เชื่อมต่อ OpenAI API แล้ว แชทใช้ ${appConfig.model || "default model"} และ AI บนกระดานใช้ ${appConfig.moveModel || appConfig.model || "default model"}`
-          : `เชื่อมต่อ OpenAI API แล้ว รุ่นที่ใช้อยู่คือ ${appConfig.model || "default model"}`
+          ? `เชื่อมต่อผู้ช่วยระยะไกลแล้ว แชทใช้ ${appConfig.model || "default model"} และ AI บนกระดานใช้ ${appConfig.moveModel || appConfig.model || "default model"}`
+          : `เชื่อมต่อผู้ช่วยระยะไกลแล้ว รุ่นที่ใช้อยู่คือ ${appConfig.model || "default model"}`
         : appConfig.serverAvailable
-          ? "เซิร์ฟเวอร์พร้อมแล้ว แต่ยังไม่พบ OPENAI_API_KEY จึงใช้ local fallback สำหรับแชทต่อไปก่อน"
+          ? "เซิร์ฟเวอร์พร้อมแล้ว แต่ยังใช้ local fallback สำหรับแชทต่อไปก่อน"
           : "ยังไม่พบ backend ของโปรเจกต์นี้ ถ้าอยากใช้ Live API ให้รันผ่าน server แล้วเปิด http://localhost:3000",
       "System"
     );
@@ -1584,7 +1584,7 @@
 
     return {
       text: payload.text || "AI ไม่ส่งข้อความกลับมา",
-      meta: payload.model ? `OpenAI ${payload.model}` : "OpenAI",
+      meta: payload.providerLabel || payload.model || "Remote AI",
     };
   }
 
@@ -1595,7 +1595,7 @@
       return {
         type: "pass",
         explanation: "ไม่มีจุดที่ลงได้โดยไม่ผิดกติกา จึงขอผ่านตานี้",
-        meta: "OpenAI",
+        meta: "Remote AI",
       };
     }
 
@@ -1621,7 +1621,7 @@
       type: payload.type === "move" ? "move" : "pass",
       coord: typeof payload.coord === "string" ? payload.coord : null,
       explanation: payload.explanation || "AI เลือกตาเดินใหม่",
-      meta: payload.model ? `OpenAI ${payload.model}` : "OpenAI",
+      meta: payload.providerLabel || payload.model || "Remote AI",
     };
   }
 
@@ -2280,7 +2280,7 @@
     render();
     updateStatusNote(
       appConfig.boardAiApiEnabled
-        ? "AI กำลังวิเคราะห์กระดานผ่าน OpenAI API"
+        ? "AI กำลังวิเคราะห์กระดานผ่าน server AI"
         : "AI กำลังประเมินกระดานและเลือกตาเดิน"
     );
 
@@ -2585,12 +2585,12 @@
     if (appConfig.chatApiEnabled && appConfig.boardAiApiEnabled) {
       message =
         appConfig.boardAiProvider === "katago"
-          ? `เชื่อมต่อแชทด้วย ${appConfig.model || "OpenAI"} แล้ว และ AI บนกระดานใช้ ${getBoardAiLabel()}`
-          : `เชื่อมต่อ OpenAI API แล้ว แชทใช้ ${appConfig.model || "default model"} และ AI บนกระดานใช้ ${getBoardAiLabel()}`;
+          ? `เชื่อมต่อแชทด้วย ${appConfig.model || "Remote AI"} แล้ว และ AI บนกระดานใช้ ${getBoardAiLabel()}`
+          : `เชื่อมต่อผู้ช่วยระยะไกลแล้ว แชทใช้ ${appConfig.model || "default model"} และ AI บนกระดานใช้ ${getBoardAiLabel()}`;
     } else if (appConfig.boardAiApiEnabled) {
       message = `AI บนกระดานพร้อมแล้ว ใช้ ${getBoardAiLabel()} ส่วนแชทยังใช้ local fallback อยู่`;
     } else if (appConfig.chatApiEnabled) {
-      message = `เชื่อมต่อ OpenAI API แล้ว รุ่นที่ใช้อยู่คือ ${appConfig.model || "default model"}`;
+      message = `เชื่อมต่อผู้ช่วยระยะไกลแล้ว รุ่นที่ใช้อยู่คือ ${appConfig.model || "default model"}`;
     } else if (appConfig.serverAvailable) {
       message =
         "เซิร์ฟเวอร์พร้อมแล้ว แต่ยังไม่พบ remote provider สำหรับแชทหรือบอร์ด จึงใช้ local fallback ต่อไปก่อน";
@@ -2689,7 +2689,7 @@
 
     return {
       text: payload.text || "AI ไม่ส่งข้อความกลับมา",
-      meta: payload.providerLabel || (payload.model ? `OpenAI ${payload.model}` : "OpenAI"),
+      meta: payload.providerLabel || payload.model || "Remote AI",
     };
   }
 

@@ -2,15 +2,12 @@ import "dotenv/config";
 import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
-import OpenAI from "openai";
 import { KataGoAnalysisEngine } from "./katago-engine.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const app = express();
 const port = Number(process.env.PORT || 3000);
-const chatModel = process.env.OPENAI_MODEL || "gpt-5.4-mini";
-const openAiMoveModel = process.env.OPENAI_MOVE_MODEL || chatModel;
 const requestedBoardAiProvider = normalizeBoardAiProvider(
   process.env.BOARD_AI_PROVIDER || "auto"
 );
@@ -27,9 +24,6 @@ const kataGoPassUtilityEpsilon = parseNonNegativeFloat(
   process.env.KATAGO_PASS_UTILITY_EPSILON,
   0.035
 );
-const client = process.env.OPENAI_API_KEY
-  ? new OpenAI({ apiKey: process.env.OPENAI_API_KEY })
-  : null;
 const kataGoEngine = new KataGoAnalysisEngine({
   executablePath: process.env.KATAGO_PATH,
   modelPath: process.env.KATAGO_MODEL,
@@ -67,9 +61,9 @@ app.get("/api/config", (_request, response) => {
   const boardAiStatus = getBoardAiAvailability();
 
   response.json({
-    chatApiEnabled: Boolean(client),
-    apiEnabled: Boolean(client),
-    model: chatModel,
+    chatApiEnabled: false,
+    apiEnabled: false,
+    model: null,
     boardAiApiEnabled: boardAiStatus.enabled,
     moveModel: boardAiStatus.label,
     boardAiProvider: boardAiStatus.provider,
@@ -78,65 +72,10 @@ app.get("/api/config", (_request, response) => {
 });
 
 app.post("/api/chat", async (request, response) => {
-  if (!client) {
-    response.status(503).json({
-      error: "OpenAI API key is not configured on the server.",
-    });
-    return;
-  }
-
-  const { messages, boardState, userMessage } = request.body ?? {};
-
-  if (!Array.isArray(messages) || typeof userMessage !== "string") {
-    response.status(400).json({
-      error: "Invalid payload. Expected messages[] and userMessage.",
-    });
-    return;
-  }
-
-  const promptContext = createBoardPrompt(boardState);
-
-  try {
-    const apiResponse = await client.responses.create({
-      model: chatModel,
-      store: false,
-      max_output_tokens: 260,
-      input: [
-        {
-          role: "developer",
-          content:
-            "You are Sensei Chat, a warm and concise Go coach for a 9x9 Go prototype. Reply in Thai unless the user clearly asks for another language. Base your answer on the supplied board snapshot. Keep answers practical, friendly, and short. If you suggest a move, mention the board coordinate explicitly. If the board summary is approximate, say so briefly instead of overstating certainty.",
-        },
-        ...messages.map((message) => ({
-          role: normalizeRole(message.role),
-          content: String(message.text || ""),
-        })),
-        {
-          role: "user",
-          content: [
-            "Current board snapshot:",
-            promptContext,
-            "",
-            `Latest user question: ${userMessage}`,
-          ].join("\n"),
-        },
-      ],
-    });
-
-    response.json({
-      text: apiResponse.output_text,
-      requestId: apiResponse.id,
-      model: chatModel,
-      provider: "openai",
-      providerLabel: `OpenAI ${chatModel}`,
-    });
-  } catch (error) {
-    console.error("OpenAI chat request failed:", error);
-    response.status(500).json({
-      error: "OpenAI request failed.",
-      details: error instanceof Error ? error.message : String(error),
-    });
-  }
+  void request;
+  response.status(503).json({
+    error: "Remote chat provider is disabled on the server.",
+  });
 });
 
 app.post("/api/move", async (request, response) => {
@@ -170,11 +109,7 @@ app.post("/api/move", async (request, response) => {
 
 app.listen(port, () => {
   console.log(`Go Sensei Lab server listening on port ${port}`);
-  console.log(
-    client
-      ? `Live OpenAI chat enabled with model ${chatModel}`
-      : "OPENAI_API_KEY not found, using local fallback chat"
-  );
+  console.log("Remote chat provider disabled, using local fallback chat");
 
   const boardAiStatus = getBoardAiAvailability();
 
@@ -225,18 +160,16 @@ function createHealthPayload() {
     timestamp: new Date().toISOString(),
     uptimeSeconds: Math.round(process.uptime()),
     chat: {
-      remoteEnabled: Boolean(client),
-      provider: client ? "openai" : "local-fallback",
-      label: client ? `OpenAI ${chatModel}` : "Local fallback",
-      model: client ? chatModel : null,
+      remoteEnabled: false,
+      provider: "local-fallback",
+      label: "Local fallback",
+      model: null,
     },
     boardAi: {
       requestedProvider: requestedBoardAiProvider,
       remoteEnabled: boardAiStatus.enabled,
       provider: boardAiStatus.provider,
       label: boardAiStatus.label,
-      openAiConfigured: Boolean(client),
-      openAiModel: client ? openAiMoveModel : null,
       kataGo: {
         configured: kataGoStatus.configured,
         ready: kataGoStatus.ready,
@@ -265,20 +198,12 @@ function getBoardAiAvailability() {
 }
 
 function getAvailableBoardAiProvider() {
-  if (requestedBoardAiProvider === "openai") {
-    return client ? { provider: "openai", label: `OpenAI ${openAiMoveModel}` } : null;
-  }
-
   if (requestedBoardAiProvider === "katago") {
     return kataGoEngine.isReady() ? { provider: "katago", label: kataGoLabel } : null;
   }
 
   if (kataGoEngine.isReady()) {
     return { provider: "katago", label: kataGoLabel };
-  }
-
-  if (client) {
-    return { provider: "openai", label: `OpenAI ${openAiMoveModel}` };
   }
 
   return null;
@@ -312,63 +237,10 @@ async function requestBoardMove({ boardState, legalMoves, playerColor }) {
   }
 
   if (provider.provider === "katago") {
-    try {
-      return await requestKataGoMove({ boardState, legalMoves, playerColor });
-    } catch (error) {
-      if (requestedBoardAiProvider === "auto" && client) {
-        console.warn(
-          `KataGo move request failed, falling back to OpenAI: ${
-            error instanceof Error ? error.message : String(error)
-          }`
-        );
-        return requestOpenAiMove({ boardState, legalMoves, playerColor });
-      }
-
-      throw error;
-    }
+    return requestKataGoMove({ boardState, legalMoves, playerColor });
   }
 
-  return requestOpenAiMove({ boardState, legalMoves, playerColor });
-}
-
-async function requestOpenAiMove({ boardState, legalMoves, playerColor }) {
-  if (!client) {
-    throw new Error("OpenAI API key is not configured on the server.");
-  }
-
-  const allCoords = Array.isArray(legalMoves.allCoords) ? legalMoves.allCoords : [];
-  const shortlist = Array.isArray(legalMoves.shortlist) ? legalMoves.shortlist : [];
-
-  const apiResponse = await client.responses.create({
-    model: openAiMoveModel,
-    store: false,
-    max_output_tokens: 180,
-    input: [
-      {
-        role: "developer",
-        content:
-          "You are a strong but practical 9x9 Go opponent. Choose exactly one next move for the current player from the allowed moves list, or choose PASS. Do not invent coordinates. Reply with JSON only in this exact shape: {\"type\":\"move\"|\"pass\",\"coord\":\"D6\"|null,\"explanation\":\"short Thai explanation\"}. Keep explanation concise and strategic.",
-      },
-      {
-        role: "user",
-        content: createMovePrompt(boardState, playerColor, allCoords, shortlist),
-      },
-    ],
-  });
-
-  const parsedMove = parseMoveResponse(apiResponse.output_text);
-
-  if (parsedMove.type === "move" && !allCoords.includes(parsedMove.coord)) {
-    throw new Error(`Model chose an illegal coordinate: ${parsedMove.coord}`);
-  }
-
-  return {
-    ...parsedMove,
-    requestId: apiResponse.id,
-    model: openAiMoveModel,
-    provider: "openai",
-    providerLabel: `OpenAI ${openAiMoveModel}`,
-  };
+  throw new Error("Remote board AI provider is disabled on the server.");
 }
 
 async function requestKataGoMove({ boardState, legalMoves, playerColor }) {
@@ -775,7 +647,7 @@ function extractFirstJsonObject(text) {
 function normalizeBoardAiProvider(value) {
   const normalized = String(value || "auto").trim().toLowerCase();
 
-  if (normalized === "katago" || normalized === "openai" || normalized === "auto") {
+  if (normalized === "katago" || normalized === "auto") {
     return normalized;
   }
 

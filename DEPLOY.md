@@ -6,19 +6,21 @@
 
 - หน้าเกมจะยังเปิดได้
 - local fallback บางส่วนยังทำงานได้ใน browser
-- แต่ OpenAI chat และ remote board AI จะไม่ทำงาน
+- แต่ KataGo ฝั่ง server จะไม่ทำงาน
 
 ## ทางที่แนะนำ
 
-เริ่มจาก `OpenAI-only` ก่อน เพราะ deploy ง่ายสุด และ AI ทั้งแชทกับตาเดินบนกระดานยังทำงานได้ครบ
+เริ่มจาก `Local fallback` ก่อน หรือถ้าจะใช้ KataGo ให้เตรียมไฟล์ engine/model/config ให้พร้อมบนเครื่อง deploy
 
-ค่าขั้นต่ำที่ควรตั้งใน environment:
+ค่าขั้นต่ำที่ควรตั้งใน environment เมื่อต้องการ KataGo:
 
 ```env
-OPENAI_API_KEY=your_openai_api_key_here
-OPENAI_MODEL=gpt-5.4-mini
-OPENAI_MOVE_MODEL=gpt-5.4-mini
-BOARD_AI_PROVIDER=openai
+BOARD_AI_PROVIDER=auto
+BOARD_RULES=chinese
+BOARD_KOMI=5.5
+KATAGO_PATH=/app/tools/katago/engine/katago
+KATAGO_MODEL=/app/tools/katago/models/model.bin.gz
+KATAGO_CONFIG=/app/tools/katago/config/analysis_example.cfg
 PORT=3000
 ```
 
@@ -67,11 +69,11 @@ npm start
 /api/config
 ```
 
-ถ้า `chatApiEnabled` และ `boardAiApiEnabled` เป็น `true` แปลว่า OpenAI ฝั่ง server พร้อมแล้ว
+ถ้า `boardAiApiEnabled` เป็น `true` แปลว่า KataGo ฝั่ง server พร้อมแล้ว
 
 ## วิธีที่ 2: Deploy ด้วย Docker
 
-มี `Dockerfile` ให้แล้วสำหรับ deploy แบบ OpenAI-only
+มี `Dockerfile` ให้แล้วสำหรับ deploy แบบทั่วไป และสามารถใช้กับ KataGo ได้ถ้าไฟล์ที่เกี่ยวข้องถูกเตรียมไว้ครบ
 
 ### Build image
 
@@ -84,19 +86,6 @@ docker build -t go-sensei-lab .
 ```bash
 docker run --rm -p 3000:3000 --env-file .env go-sensei-lab
 ```
-
-หรือถ้าอยากส่ง env ทีละตัว:
-
-```bash
-docker run --rm -p 3000:3000 ^
-  -e OPENAI_API_KEY=your_openai_api_key_here ^
-  -e OPENAI_MODEL=gpt-5.4-mini ^
-  -e OPENAI_MOVE_MODEL=gpt-5.4-mini ^
-  -e BOARD_AI_PROVIDER=openai ^
-  go-sensei-lab
-```
-
-บน Linux/macOS ใช้ `\` แทน `^`
 
 ## ถ้าอยากใช้ KataGo บนเว็บด้วย
 
@@ -111,9 +100,6 @@ docker run --rm -p 3000:3000 ^
 ตัวอย่าง env สำหรับ Linux:
 
 ```env
-OPENAI_API_KEY=your_openai_api_key_here
-OPENAI_MODEL=gpt-5.4-mini
-OPENAI_MOVE_MODEL=gpt-5.4-mini
 BOARD_AI_PROVIDER=auto
 BOARD_RULES=chinese
 BOARD_KOMI=5.5
@@ -128,8 +114,8 @@ PORT=3000
 หมายเหตุ:
 
 - `BOARD_AI_PROVIDER=katago` จะบังคับใช้ KataGo เท่านั้น
-- `BOARD_AI_PROVIDER=auto` จะพยายามใช้ KataGo ก่อน แล้ว fallback ไป OpenAI ถ้า KataGo ใช้ไม่ได้
-- Docker setup ที่เพิ่มให้ตอนนี้ตั้งใจทำสำหรับ OpenAI-only ก่อน โดย `.dockerignore` จะไม่ copy engine/model ของ KataGo เข้า image
+- `BOARD_AI_PROVIDER=auto` จะพยายามใช้ KataGo ก่อน แล้ว fallback ไป local engine ถ้า KataGo ใช้ไม่ได้
+- Docker setup ที่เพิ่มให้ตอนนี้จะไม่ copy engine/model ของ KataGo เข้า image โดยอัตโนมัติ
 
 ถ้าจะใช้ KataGo ใน Docker จริง:
 
@@ -144,17 +130,15 @@ PORT=3000
 - browser เปิดเว็บจาก service นี้โดยตรง
 - service เดียวกันเสิร์ฟ `index.html`, `app.js`, `styles.css`
 - service เดียวกันรับ `/api/chat` และ `/api/move`
-- เก็บ `OPENAI_API_KEY` ไว้ใน environment ของ server เท่านั้น
+- ถ้าจะใช้ KataGo ให้เก็บไฟล์และ path ของ KataGo ไว้ฝั่ง server เท่านั้น
 
 ไม่แนะนำ:
 
 - เอา frontend ไปไว้ static host แล้วแยก backend ทีหลังโดยยังไม่เพิ่ม CORS หรือ reverse proxy
-- ใส่ API key ลงใน frontend
+- เอา binary/model ของ KataGo แบบ Windows ไปใช้บน Linux ตรง ๆ
 
 ## เช็กลิสต์ก่อนขึ้น production
 
-- ตั้ง `OPENAI_API_KEY` ที่ฝั่ง server แล้ว
-- ใช้ `BOARD_AI_PROVIDER=openai` ถ้าต้องการ deploy ให้ขึ้นง่ายก่อน
 - ถ้าจะใช้ KataGo บน Linux ได้เปลี่ยน path จาก Windows เป็น Linux แล้ว
 - เปิด `/healthz` แล้วได้ `ok: true`
-- เปิดหน้าเว็บจริงแล้วกด chat และให้ AI เดินหมากได้
+- เปิดหน้าเว็บจริงแล้วกดให้ AI เดินหมากได้

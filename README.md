@@ -1,25 +1,15 @@
 # Go Sensei Lab
 
-ต้นแบบเกมหมากล้อม 9x9 ที่เล่นกับ AI บนกระดานได้ และมี sidebar chat ที่ต่อ OpenAI API จริงได้เมื่อมี `OPENAI_API_KEY`
-
-## Deploy on Render
-
-ถ้าจะเอาขึ้นเว็บแบบง่ายสุด ให้ใช้ Render แบบ `OpenAI-only` ก่อน
-
-- มีไฟล์ [render.yaml](./render.yaml) ให้ Render อ่านค่าได้ตรงๆ
-- มีคู่มือสั้นที่ [RENDER.md](./RENDER.md)
-- มีคู่มือรวมการ deploy ที่ [DEPLOY.md](./DEPLOY.md)
-
-ค่าที่ต้องกรอกบน Render เพิ่มเองมีหลักๆ แค่ `OPENAI_API_KEY`
+ต้นแบบเกมหมากล้อม 9x9 ที่เล่นกับ AI ได้ โดยใช้ local fallback ใน browser และสามารถต่อ KataGo ได้ถ้ามีการตั้งค่า engine ฝั่ง server
 
 ## โหมดที่รองรับ
 
 - `Local fallback`
   - กระดานเล่นกับ AI heuristic ในหน้าเว็บ
   - ช่องแชทยังตอบได้จาก logic ภายในโปรเจกต์
-- `Live API chat`
-  - ช่องแชทจะวิ่งผ่าน backend ไปหา OpenAI Responses API
-  - API key ถูกเก็บไว้ฝั่ง server ไม่ถูกฝังใน browser
+- `KataGo board AI`
+  - ฝั่ง server จะเรียก KataGo analysis engine เพื่อหาตาเดินบนกระดาน
+  - ถ้า KataGo ยังไม่พร้อม ระบบจะถอยกลับไปใช้ local fallback อัตโนมัติ
 
 ## วิธีเริ่มใช้งาน
 
@@ -35,12 +25,15 @@ npm install
 copy .env.example .env
 ```
 
-3. ใส่ค่า `OPENAI_API_KEY` ของคุณใน `.env`
+3. ถ้าจะใช้ KataGo ให้ตั้งค่า path ที่เกี่ยวข้องใน `.env`
 
 ```env
-OPENAI_API_KEY=your_openai_api_key_here
-OPENAI_MODEL=gpt-5.4-mini
-OPENAI_MOVE_MODEL=gpt-5.4-mini
+BOARD_AI_PROVIDER=auto
+BOARD_RULES=chinese
+BOARD_KOMI=5.5
+KATAGO_PATH=tools\katago\engine\katago.exe
+KATAGO_MODEL=tools\katago\models\kata1-zhizi-b28c512nbt-muonfd2.bin.gz
+KATAGO_CONFIG=tools\katago\config\analysis_example.cfg
 PORT=3000
 ```
 
@@ -58,21 +51,19 @@ http://localhost:3000
 
 ## ไฟล์สำคัญ
 
-- `server.js` เสิร์ฟหน้าเว็บและ proxy แชทไป OpenAI API
-- `server.js` เสิร์ฟหน้าเว็บ, proxy แชทไป OpenAI API, และขอ “ตาเดินถัดไป” สำหรับ AI บนกระดาน
+- `server.js` เสิร์ฟหน้าเว็บและประสานงานกับ KataGo เมื่อมีการตั้งค่าไว้
 - `app.js` logic เกม, AI บนกระดาน, และ client chat
 - `index.html` หน้า UI หลัก
 - `styles.css` สไตล์หน้าเกมและ sidebar
 
 ## หมายเหตุ
 
-- ถ้ายังไม่ตั้ง `OPENAI_API_KEY` โปรเจกต์จะยังเปิดได้ และช่องแชทจะ fallback เป็น AI local อัตโนมัติ
-- ถ้ามี `OPENAI_API_KEY` แล้ว ตอนนี้ทั้ง `Sensei Chat` และ `AI คู่แข่งบนกระดาน` จะใช้ OpenAI API ได้
-- ถ้าอยากให้โมเดลเดินหมากแยกจากโมเดลแชท ให้ตั้ง `OPENAI_MOVE_MODEL`
-- ถ้า Live API ใช้งานไม่ได้ระหว่างเกม ระบบจะ fallback กลับมาใช้ local engine ชั่วคราว
+- ถ้ายังไม่ตั้ง KataGo โปรเจกต์จะยังเปิดได้ และทั้งกระดานกับแชทจะ fallback เป็น logic ภายในหน้าเว็บ
+- ถ้ามี KataGo และตั้งค่า path ครบ ระบบจะใช้ KataGo สำหรับ AI บนกระดาน
+
 ## KataGo Analysis Engine
 
-The board AI can now run through KataGo Analysis Engine instead of OpenAI.
+The board AI can run through KataGo Analysis Engine when it is configured on the server.
 
 Recommended setup:
 
@@ -99,13 +90,11 @@ Provider behavior:
 
 - `BOARD_AI_PROVIDER=katago`
   - force board AI to use KataGo only
-- `BOARD_AI_PROVIDER=openai`
-  - force board AI to use the OpenAI move model only
 - `BOARD_AI_PROVIDER=auto`
-  - prefer KataGo when available, otherwise fall back to OpenAI, otherwise fall back to the local browser engine
+  - prefer KataGo when available, otherwise fall back to the local browser engine
 
 Notes:
 
-- Chat and board AI are now independent. You can use KataGo for moves while keeping chat on local fallback or OpenAI.
+- Chat and board AI are now independent. You can use KataGo for moves while keeping chat on local fallback.
 - The client now sends full move history to the server, so KataGo can analyze from the actual game sequence instead of only the visible stones.
 - If KataGo is configured but unavailable at runtime, the app will keep running and the board AI will fall back according to `BOARD_AI_PROVIDER`.

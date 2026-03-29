@@ -1,0 +1,160 @@
+# Deploy Guide
+
+โปรเจ็กต์นี้ต้อง deploy แบบ `มี backend` เพราะหน้าเว็บเรียก `./api/config`, `./api/chat`, และ `./api/move` จาก `server.js`
+
+ถ้าเอาไปวางบน static hosting อย่างเดียว:
+
+- หน้าเกมจะยังเปิดได้
+- local fallback บางส่วนยังทำงานได้ใน browser
+- แต่ OpenAI chat และ remote board AI จะไม่ทำงาน
+
+## ทางที่แนะนำ
+
+เริ่มจาก `OpenAI-only` ก่อน เพราะ deploy ง่ายสุด และ AI ทั้งแชทกับตาเดินบนกระดานยังทำงานได้ครบ
+
+ค่าขั้นต่ำที่ควรตั้งใน environment:
+
+```env
+OPENAI_API_KEY=your_openai_api_key_here
+OPENAI_MODEL=gpt-5.4-mini
+OPENAI_MOVE_MODEL=gpt-5.4-mini
+BOARD_AI_PROVIDER=openai
+PORT=3000
+```
+
+## วิธีที่ 1: Deploy เป็น Node service
+
+ใช้ได้กับ Railway, Render, Fly.io, VPS, หรือเครื่อง Linux ที่รัน Node ได้
+
+### ตั้งค่า
+
+1. ใช้ Node 20 ขึ้นไป
+2. อัปโหลด source code ทั้งโปรเจ็กต์
+3. ตั้ง install command เป็น:
+
+```bash
+npm ci
+```
+
+4. ตั้ง start command เป็น:
+
+```bash
+npm start
+```
+
+5. ตั้ง environment variables ตามตัวอย่างด้านบน
+
+### ตรวจว่า deploy สำเร็จ
+
+เปิด endpoint นี้หลัง deploy:
+
+```text
+/healthz
+```
+
+ควรได้ JSON กลับมาประมาณนี้:
+
+```json
+{
+  "ok": true,
+  "service": "go-sensei-lab"
+}
+```
+
+และเปิด:
+
+```text
+/api/config
+```
+
+ถ้า `chatApiEnabled` และ `boardAiApiEnabled` เป็น `true` แปลว่า OpenAI ฝั่ง server พร้อมแล้ว
+
+## วิธีที่ 2: Deploy ด้วย Docker
+
+มี `Dockerfile` ให้แล้วสำหรับ deploy แบบ OpenAI-only
+
+### Build image
+
+```bash
+docker build -t go-sensei-lab .
+```
+
+### Run container
+
+```bash
+docker run --rm -p 3000:3000 --env-file .env go-sensei-lab
+```
+
+หรือถ้าอยากส่ง env ทีละตัว:
+
+```bash
+docker run --rm -p 3000:3000 ^
+  -e OPENAI_API_KEY=your_openai_api_key_here ^
+  -e OPENAI_MODEL=gpt-5.4-mini ^
+  -e OPENAI_MOVE_MODEL=gpt-5.4-mini ^
+  -e BOARD_AI_PROVIDER=openai ^
+  go-sensei-lab
+```
+
+บน Linux/macOS ใช้ `\` แทน `^`
+
+## ถ้าอยากใช้ KataGo บนเว็บด้วย
+
+ทำได้ แต่ต้องเป็นโฮสต์ที่รัน native process ได้จริง เช่น VPS, Docker on VM, หรือ Node host ที่อนุญาตให้รัน binary ภายนอก
+
+ข้อสำคัญ:
+
+- binary `tools/katago/engine/katago.exe` ในโปรเจ็กต์นี้เป็นของ Windows
+- ถ้า deploy ไป Linux ต้องเปลี่ยนเป็น KataGo binary ของ Linux
+- model และ config ต้องอยู่บนเครื่อง deploy จริง และ path ต้องเป็น path ของเครื่องนั้น
+
+ตัวอย่าง env สำหรับ Linux:
+
+```env
+OPENAI_API_KEY=your_openai_api_key_here
+OPENAI_MODEL=gpt-5.4-mini
+OPENAI_MOVE_MODEL=gpt-5.4-mini
+BOARD_AI_PROVIDER=auto
+BOARD_RULES=chinese
+BOARD_KOMI=5.5
+KATAGO_PATH=/app/tools/katago/engine/katago
+KATAGO_MODEL=/app/tools/katago/models/model.bin.gz
+KATAGO_CONFIG=/app/tools/katago/config/analysis_example.cfg
+KATAGO_MAX_VISITS=300
+KATAGO_TIMEOUT_MS=12000
+PORT=3000
+```
+
+หมายเหตุ:
+
+- `BOARD_AI_PROVIDER=katago` จะบังคับใช้ KataGo เท่านั้น
+- `BOARD_AI_PROVIDER=auto` จะพยายามใช้ KataGo ก่อน แล้ว fallback ไป OpenAI ถ้า KataGo ใช้ไม่ได้
+- Docker setup ที่เพิ่มให้ตอนนี้ตั้งใจทำสำหรับ OpenAI-only ก่อน โดย `.dockerignore` จะไม่ copy engine/model ของ KataGo เข้า image
+
+ถ้าจะใช้ KataGo ใน Docker จริง:
+
+1. เอา Linux KataGo binary และ model มาใส่ใน path ที่ถูกต้อง
+2. ปรับ `.dockerignore` ให้ไม่ตัดไฟล์ KataGo ที่ต้องใช้
+3. build image ใหม่
+
+## โครงแบบ deploy ที่ควรใช้
+
+โครงแบบที่แนะนำ:
+
+- browser เปิดเว็บจาก service นี้โดยตรง
+- service เดียวกันเสิร์ฟ `index.html`, `app.js`, `styles.css`
+- service เดียวกันรับ `/api/chat` และ `/api/move`
+- เก็บ `OPENAI_API_KEY` ไว้ใน environment ของ server เท่านั้น
+
+ไม่แนะนำ:
+
+- เอา frontend ไปไว้ static host แล้วแยก backend ทีหลังโดยยังไม่เพิ่ม CORS หรือ reverse proxy
+- ใส่ API key ลงใน frontend
+
+## เช็กลิสต์ก่อนขึ้น production
+
+- ตั้ง `OPENAI_API_KEY` ที่ฝั่ง server แล้ว
+- ใช้ `BOARD_AI_PROVIDER=openai` ถ้าต้องการ deploy ให้ขึ้นง่ายก่อน
+- ถ้าจะใช้ KataGo บน Linux ได้เปลี่ยน path จาก Windows เป็น Linux แล้ว
+- เปิด `/healthz` แล้วได้ `ok: true`
+- เปิดหน้าเว็บจริงแล้วกด chat และให้ AI เดินหมากได้

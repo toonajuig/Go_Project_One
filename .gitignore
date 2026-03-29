@@ -1,0 +1,10 @@
+node_modules/
+.vscode/
+.env
+*.log
+*.pid
+analysis_logs/
+tools/katago/engine/
+tools/katago/models/
+tools/katago/downloads/
+tools/katago/engine/KataGoData/opencltuning/

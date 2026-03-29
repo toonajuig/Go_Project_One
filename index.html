@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="th">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Go Sensei Lab</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Fraunces:wght@500;700&family=Space+Grotesk:wght@400;500;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./styles.css" />
+    <script defer src="./app.js"></script>
+  </head>
+  <body>
+    <div class="ambient ambient-left"></div>
+    <div class="ambient ambient-right"></div>
+
+    <main class="app-shell">
+      <section class="play-surface">
+        <div class="hero-card">
+          <p class="eyebrow">Prototype</p>
+          <h1>Go Sensei Lab</h1>
+          <p class="hero-copy">
+            ต้นแบบเกมหมากล้อม 9x9 ที่เล่นกับ AI ได้
+            พร้อมแชทด้านขวาสำหรับถามคำแนะนำ และอ่านสถานะของกระดานแบบเรียลไทม์
+          </p>
+        </div>
+
+        <div class="session-bar" aria-label="Game overview">
+          <span id="playerSeatBadge" class="session-pill session-pill-strong">You play Black</span>
+          <span id="modeBadge" class="session-pill">Preparing board</span>
+          <span id="providerBadge" class="session-pill">Checking AI provider</span>
+        </div>
+
+        <div class="control-strip">
+          <button id="newGameButton" class="primary-button">New Game</button>
+          <button id="passButton" class="secondary-button">Pass</button>
+          <button id="undoButton" class="secondary-button">Undo</button>
+          <button id="scoreButton" class="secondary-button">Count Score</button>
+          <button id="suggestionButton" class="secondary-button">Ask AI</button>
+        </div>
+
+        <div class="status-grid">
+          <article class="status-card">
+            <span class="label">Turn</span>
+            <strong id="turnStatus">Black to move</strong>
+          </article>
+          <article class="status-card">
+            <span class="label">Captures</span>
+            <strong id="captureStatus">B 0 | W 0</strong>
+          </article>
+          <article class="status-card">
+            <span class="label">Estimate</span>
+            <strong id="scoreStatus">B 0 | W 5.5</strong>
+          </article>
+          <article class="status-card">
+            <span class="label">Last Move</span>
+            <strong id="lastMoveStatus">ยังไม่มีตาเดิน</strong>
+          </article>
+        </div>
+
+        <p id="statusNote" class="status-note">
+          คุณเล่นเป็นดำ คลิกที่จุดตัดเพื่อวางหมาก จากนั้น AI จะตอบโต้เป็นขาว
+        </p>
+
+        <div class="board-card">
+          <div class="board-card-header">
+            <div>
+              <p class="eyebrow">Board View</p>
+              <h2 class="section-title">9x9 Match</h2>
+            </div>
+
+            <div class="board-legend" aria-label="Board legend">
+              <span class="legend-item">
+                <span class="legend-swatch legend-swatch-last"></span>
+                Last move
+              </span>
+              <span class="legend-item">
+                <span class="legend-swatch legend-swatch-suggest"></span>
+                AI tip
+              </span>
+              <span class="legend-item">
+                <span class="legend-swatch legend-swatch-score"></span>
+                Score review
+              </span>
+            </div>
+          </div>
+
+          <div class="board-shell">
+            <div id="topAxis" class="axis axis-horizontal"></div>
+            <div class="board-stage">
+              <div id="leftAxis" class="axis axis-vertical"></div>
+              <div id="board" class="board-grid" aria-label="Go board"></div>
+            </div>
+          </div>
+        </div>
+
+        <section id="scoringPanel" class="scoring-panel" hidden>
+          <div class="scoring-panel-header">
+            <div>
+              <p class="eyebrow">Scoring</p>
+              <h2>Score Review</h2>
+              <p id="scoringSummary" class="scoring-summary">
+                Click a dead group to toggle it, then confirm the final count.
+              </p>
+            </div>
+            <div class="scoring-actions">
+              <button id="resumePlayButton" class="secondary-button">
+                Resume Play
+              </button>
+              <button id="finishScoringButton" class="primary-button">
+                Finish Score
+              </button>
+            </div>
+          </div>
+
+          <div class="scoring-grid">
+            <article class="scoring-card scoring-card-black">
+              <span class="label">Black</span>
+              <strong id="scoreBlackTotal">0.0</strong>
+              <p id="scoreBlackDetail" class="scoring-card-detail">
+                Stones 0 + Territory 0
+              </p>
+            </article>
+
+            <article class="scoring-card scoring-card-white">
+              <span class="label">White</span>
+              <strong id="scoreWhiteTotal">5.5</strong>
+              <p id="scoreWhiteDetail" class="scoring-card-detail">
+                Stones 0 + Territory 0 + Komi 5.5
+              </p>
+            </article>
+
+            <article class="scoring-card scoring-card-neutral">
+              <span class="label">Neutral</span>
+              <strong id="scoreNeutralTotal">0</strong>
+              <p id="scoreNeutralDetail" class="scoring-card-detail">
+                Dame 0 | Dead marked B 0 / W 0
+              </p>
+            </article>
+          </div>
+
+          <p id="scoringHint" class="scoring-hint">
+            During scoring, click any stone to mark that whole connected group
+            as dead or alive.
+          </p>
+        </section>
+      </section>
+
+      <aside class="chat-surface">
+        <div class="chat-header">
+          <div>
+            <p class="eyebrow">AI Sidebar</p>
+            <h2>Sensei Chat</h2>
+          </div>
+          <span id="aiMood" class="mood-pill">Ready</span>
+        </div>
+
+        <div class="quick-prompts">
+          <button class="prompt-chip" data-prompt="ช่วยแนะนำตาเดินให้หน่อย">
+            แนะนำตาเดิน
+          </button>
+          <button class="prompt-chip" data-prompt="ตอนนี้ใครนำอยู่">
+            ใครนำอยู่
+          </button>
+          <button class="prompt-chip" data-prompt="อธิบายกติกา GO ให้หน่อย">
+            กติกา GO
+          </button>
+          <button class="prompt-chip" data-prompt="สรุปจุดอันตรายบนกระดาน">
+            จุดอันตราย
+          </button>
+        </div>
+
+        <p class="chat-helper-copy">
+          Ask about the current board, request a move idea, or let Sensei explain the danger points.
+        </p>
+
+        <div id="chatMessages" class="chat-messages" aria-live="polite"></div>
+
+        <form id="chatForm" class="chat-form">
+          <label class="sr-only" for="chatInput">ถาม AI เกี่ยวกับกระดาน</label>
+          <textarea
+            id="chatInput"
+            rows="3"
+            placeholder="เช่น: ตานี้ควรลงตรงไหนดี หรือ ทำไมกลุ่มนี้ถึงอันตราย"
+          ></textarea>
+          <div class="chat-form-footer">
+            <p class="chat-shortcut-hint">Enter to send, Shift+Enter for a new line</p>
+            <button type="submit" class="primary-button chat-send">Send</button>
+          </div>
+        </form>
+      </aside>
+    </main>
+  </body>
+</html>

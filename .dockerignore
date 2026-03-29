@@ -1,0 +1,14 @@
+node_modules/
+.env
+.env.*
+!.env.example
+*.log
+*.pid
+.git/
+.vscode/
+analysis_logs/
+codex-run.err.log
+codex-run.out.log
+tools/katago/downloads/
+tools/katago/engine/
+tools/katago/models/

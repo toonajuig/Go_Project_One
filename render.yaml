@@ -1,0 +1,15 @@
+services:
+  - type: web
+    name: go-sensei-lab
+    runtime: docker
+    plan: free
+    dockerfilePath: ./Dockerfile
+    dockerContext: .
+    healthCheckPath: /healthz
+    envVars:
+      - key: BOARD_AI_PROVIDER
+        value: local
+      - key: BOARD_RULES
+        value: chinese
+      - key: BOARD_KOMI
+        value: "5.5"

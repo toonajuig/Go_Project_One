@@ -22,12 +22,12 @@ services:
       - key: KATAGO_MODEL
         value: /app/tools/katago/models/kata1-zhizi-b28c512nbt-muonfd2.bin.gz
       - key: KATAGO_CONFIG
-        value: /app/tools/katago/config/analysis_example.cfg
+        value: /app/tools/katago/config/render_analysis.cfg
       - key: KATAGO_DOWNLOAD_URL
         value: https://github.com/lightvector/KataGo/releases/download/v1.16.4/katago-v1.16.4-eigen-linux-x64.zip
       - key: KATAGO_MODEL_URL
         value: https://media.katagotraining.org/uploaded/networks/models/kata1/kata1-zhizi-b28c512nbt-muonfd2.bin.gz
       - key: KATAGO_MAX_VISITS
-        value: "120"
+        value: "80"
       - key: KATAGO_TIMEOUT_MS
-        value: "20000"
+        value: "30000"

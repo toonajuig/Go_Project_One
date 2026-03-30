@@ -35,12 +35,14 @@ body {
 }
 
 button,
-textarea {
+textarea,
+select {
   font: inherit;
 }
 
 button:focus-visible,
-textarea:focus-visible {
+textarea:focus-visible,
+select:focus-visible {
   outline: none;
   box-shadow:
     0 0 0 1px rgba(255, 247, 234, 0.9),
@@ -181,7 +183,36 @@ h2 {
   display: flex;
   flex-wrap: wrap;
   justify-content: center;
+  align-items: center;
   gap: 0.8rem;
+}
+
+.mode-picker {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.65rem 0.9rem;
+  border-radius: 999px;
+  background: rgba(40, 47, 56, 0.92);
+  border: 1px solid rgba(139, 158, 181, 0.38);
+  color: var(--ink);
+}
+
+.mode-picker span {
+  font-size: 0.9rem;
+  color: var(--muted);
+}
+
+.mode-select {
+  min-width: 12.5rem;
+  border: none;
+  background: transparent;
+  color: var(--ink);
+  cursor: pointer;
+}
+
+.mode-select option {
+  color: #15181c;
 }
 
 .quick-prompts {
@@ -615,6 +646,10 @@ h2 {
   border: 1px solid rgba(80, 90, 100, 0.42);
   display: grid;
   gap: 0.95rem;
+}
+
+.scoring-panel[hidden] {
+  display: none;
 }
 
 .scoring-panel-header {

@@ -61,8 +61,10 @@ export class KataGoAnalysisEngine {
 
       this.state = "starting";
       this.lastError = null;
+      const spawnEnv = createKataGoSpawnEnv(this.executablePath);
 
       const child = spawn(this.executablePath, args, {
+        env: spawnEnv,
         stdio: ["pipe", "pipe", "pipe"],
         windowsHide: true,
       });
@@ -277,4 +279,22 @@ export class KataGoAnalysisEngine {
 
 function createQueryId() {
   return `katago-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+}
+
+function createKataGoSpawnEnv(executablePath) {
+  const env = { ...process.env };
+
+  // Some Linux KataGo release artifacts are packaged as AppImages. In container
+  // environments such as Render, FUSE is typically unavailable, so ask the
+  // AppImage runtime to self-extract and run without mounting.
+  if (
+    process.platform !== "win32" &&
+    typeof executablePath === "string" &&
+    executablePath.trim() &&
+    !env.APPIMAGE_EXTRACT_AND_RUN
+  ) {
+    env.APPIMAGE_EXTRACT_AND_RUN = "1";
+  }
+
+  return env;
 }

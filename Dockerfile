@@ -4,6 +4,7 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 ENV PORT=3000
+ENV APPIMAGE_EXTRACT_AND_RUN=1
 
 ARG INSTALL_KATAGO=0
 ARG KATAGO_DOWNLOAD_URL=https://github.com/lightvector/KataGo/releases/download/v1.16.4/katago-v1.16.4-eigen-linux-x64.zip

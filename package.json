@@ -8,7 +8,9 @@
   },
   "scripts": {
     "start": "node server.js",
-    "dev": "node --watch server.js"
+    "dev": "node --watch server.js",
+    "start:katago-adapter": "node katago-rest-adapter.js",
+    "dev:katago-adapter": "node --watch katago-rest-adapter.js"
   },
   "dependencies": {
     "dotenv": "^17.2.3",

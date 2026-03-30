@@ -28,6 +28,14 @@ services:
       - key: KATAGO_MODEL_URL
         value: https://media.katagotraining.org/uploaded/networks/models/kata1/kata1-zhizi-b28c512nbt-muonfd2.bin.gz
       - key: KATAGO_MAX_VISITS
-        value: "160"
+        value: "240"
+      - key: KATAGO_ENDGAME_MAX_VISITS
+        value: "360"
+      - key: KATAGO_ENDGAME_MIN_MOVES
+        value: "42"
+      - key: KATAGO_ENDGAME_MAX_EMPTY_POINTS
+        value: "18"
       - key: KATAGO_TIMEOUT_MS
-        value: "45000"
+        value: "60000"
+      - key: KATAGO_PASS_MIN_MOVES
+        value: "28"

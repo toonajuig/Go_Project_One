@@ -9,6 +9,7 @@
     local: "local",
     pvp: "pvp",
   };
+  const BOT_LABEL = "Bot";
 
   const dom = {
     board: document.getElementById("board"),
@@ -152,12 +153,12 @@
       return getBoardAiLabel();
     }
 
-    return "Local Heuristic";
+    return BOT_LABEL;
   }
 
   function getCoachLabel() {
     if (isPvPMode()) {
-      return isKataGoAvailable() ? getBoardAiLabel() : "Local Heuristic";
+      return isKataGoAvailable() ? getBoardAiLabel() : BOT_LABEL;
     }
 
     return getCurrentAiLabel();
@@ -170,7 +171,7 @@
 
     return isKataGoMode() && isKataGoAvailable()
       ? "Player vs KataGo"
-      : "Player vs Local Heuristic";
+      : "Player vs Bot";
   }
 
   function getTurnLabel(color) {
@@ -197,7 +198,7 @@
       return `New game started against KataGo. You play ${getColorLabel(humanColor)} and KataGo plays ${getColorLabel(aiColor)}.`;
     }
 
-    return `New game started against the local heuristic engine. You play ${getColorLabel(humanColor)} and ${getColorLabel(aiColor)} is automated.`;
+    return `New game started against Bot. You play ${getColorLabel(humanColor)} and Bot plays ${getColorLabel(aiColor)}.`;
   }
 
   function createInitialState(humanColor = preferredHumanColor) {
@@ -2527,6 +2528,8 @@
       size: state.size,
       boardRows: getBoardRows(state),
       currentPlayer: state.currentPlayer,
+      consecutivePasses: state.consecutivePasses,
+      emptyPoints: countEmptyPoints(state),
       lastMove: state.lastMove
         ? state.lastMove.isPass
           ? `${state.lastMove.color} pass`
@@ -2914,7 +2917,7 @@
 
     return {
       ...chooseStrategicMove(state, color),
-      meta: "Local Heuristic",
+      meta: BOT_LABEL,
     };
   }
 
@@ -2973,12 +2976,12 @@
       } catch (error) {
         addChatMessage(
           "system",
-          `Could not get a suggestion from ${getCoachLabel()}, so Local Heuristic is being used instead (${error instanceof Error ? error.message : String(error)})`,
+          `Could not get a suggestion from ${getCoachLabel()}, so ${BOT_LABEL} is being used instead (${error instanceof Error ? error.message : String(error)})`,
           "System"
         );
         choice = {
           ...chooseStrategicMove(state, playerColor),
-          meta: "Local Heuristic",
+          meta: BOT_LABEL,
         };
       }
 
@@ -3130,11 +3133,11 @@
       } catch (error) {
         choice = {
           ...chooseStrategicMove(state, state.currentPlayer),
-          meta: "Local Heuristic",
+          meta: BOT_LABEL,
         };
         addChatMessage(
           "system",
-          `${getCurrentAiLabel()} could not be reached, so Local Heuristic took over instead (${error instanceof Error ? error.message : String(error)})`,
+          `${getCurrentAiLabel()} could not be reached, so ${BOT_LABEL} took over instead (${error instanceof Error ? error.message : String(error)})`,
           "System"
         );
       }
@@ -3162,7 +3165,7 @@
             : null;
       const fallbackChoice = {
         ...chooseStrategicMove(state, state.currentPlayer),
-        meta: "Local Heuristic",
+        meta: BOT_LABEL,
       };
       const resolvedIndex =
         typeof chosenIndex === "number"
@@ -3255,7 +3258,7 @@
 
     const message =
       requestedMode === GAME_MODES.katago && resolvedMode !== GAME_MODES.katago
-        ? "KataGo is not available right now, so a new game started in Local Heuristic mode instead."
+        ? "KataGo is not available right now, so a new game started in Bot mode instead."
         : `New game started in ${getPlayModeLabel()}.`;
 
     updateStatusNote(message);

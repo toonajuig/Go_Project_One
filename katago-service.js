@@ -6,6 +6,12 @@ export class KataGoBoardService {
     this.boardRules = normalizeRules(options.boardRules, "chinese");
     this.boardKomi = parseFloatOr(options.boardKomi, 5.5);
     this.maxVisits = parsePositiveInt(options.maxVisits, 300);
+    this.endgameMaxVisits = parsePositiveInt(
+      options.endgameMaxVisits,
+      Math.max(this.maxVisits, Math.round(this.maxVisits * 1.5))
+    );
+    this.endgameMinMoves = parsePositiveInt(options.endgameMinMoves, 42);
+    this.endgameMaxEmptyPoints = parsePositiveInt(options.endgameMaxEmptyPoints, 18);
     this.timeoutMs = parsePositiveInt(options.timeoutMs, 12000);
     this.passMinMoves = parsePositiveInt(options.passMinMoves, 20);
     this.passScoreEpsilon = parseNonNegativeFloat(options.passScoreEpsilon, 1.25);
@@ -82,6 +88,8 @@ export class KataGoBoardService {
       passMinMoves: this.passMinMoves,
       passScoreEpsilon: this.passScoreEpsilon,
       passUtilityEpsilon: this.passUtilityEpsilon,
+      endgameMinMoves: this.endgameMinMoves,
+      endgameMaxEmptyPoints: this.endgameMaxEmptyPoints,
     });
     const normalizedMove = normalizeCompatibilityMove(bestMove?.move) || "pass";
 
@@ -122,6 +130,13 @@ export class KataGoBoardService {
     const size = clampBoardSize(boardState?.size);
     const moveSequence = normalizeMoveSequence(boardState?.moveSequence);
     const allowedMoves = buildAllowedMoves(legalMoves);
+    const queryProfile = getQueryProfile({
+      boardState,
+      maxVisits: this.maxVisits,
+      endgameMaxVisits: this.endgameMaxVisits,
+      endgameMinMoves: this.endgameMinMoves,
+      endgameMaxEmptyPoints: this.endgameMaxEmptyPoints,
+    });
     const query = {
       id: createRequestId("katago"),
       moves: moveSequence,
@@ -132,7 +147,7 @@ export class KataGoBoardService {
           : this.boardKomi,
       boardXSize: size,
       boardYSize: size,
-      maxVisits: this.maxVisits,
+      maxVisits: queryProfile.maxVisits,
       analysisPVLen: 8,
       allowMoves: [
         {
@@ -154,6 +169,14 @@ export class KataGoBoardService {
   createCompatibilityQuery({ boardSize, moves, config = {}, includeOwnership = false }) {
     const size = clampBoardSize(boardSize);
     const normalizedMoves = normalizeAlternatingMoves(moves);
+    const boardState = createCompatibilityBoardState(normalizedMoves);
+    const queryProfile = getQueryProfile({
+      boardState,
+      maxVisits: this.maxVisits,
+      endgameMaxVisits: this.endgameMaxVisits,
+      endgameMinMoves: this.endgameMinMoves,
+      endgameMaxEmptyPoints: this.endgameMaxEmptyPoints,
+    });
     const query = {
       id: readRequestId(config, createRequestId("katago-rest")),
       moves: normalizedMoves,
@@ -161,7 +184,10 @@ export class KataGoBoardService {
       komi: parseFloatOr(config.komi, this.boardKomi),
       boardXSize: size,
       boardYSize: size,
-      maxVisits: parsePositiveInt(config.maxVisits ?? config.max_visits, this.maxVisits),
+      maxVisits: parsePositiveInt(
+        config.maxVisits ?? config.max_visits,
+        queryProfile.maxVisits
+      ),
       analysisPVLen: parsePositiveInt(
         config.analysisPVLen ?? config.analysis_pv_len,
         8
@@ -184,6 +210,8 @@ export class KataGoBoardService {
       passMinMoves: this.passMinMoves,
       passScoreEpsilon: this.passScoreEpsilon,
       passUtilityEpsilon: this.passUtilityEpsilon,
+      endgameMinMoves: this.endgameMinMoves,
+      endgameMaxEmptyPoints: this.endgameMaxEmptyPoints,
     });
 
     if (!bestMove) {
@@ -221,6 +249,12 @@ export function createKataGoServiceFromEnv(env = process.env, overrides = {}) {
     boardRules: overrides.boardRules ?? env.BOARD_RULES,
     boardKomi: overrides.boardKomi ?? env.BOARD_KOMI,
     maxVisits: overrides.maxVisits ?? env.KATAGO_MAX_VISITS,
+    endgameMaxVisits:
+      overrides.endgameMaxVisits ?? env.KATAGO_ENDGAME_MAX_VISITS,
+    endgameMinMoves:
+      overrides.endgameMinMoves ?? env.KATAGO_ENDGAME_MIN_MOVES,
+    endgameMaxEmptyPoints:
+      overrides.endgameMaxEmptyPoints ?? env.KATAGO_ENDGAME_MAX_EMPTY_POINTS,
     timeoutMs: overrides.timeoutMs ?? env.KATAGO_TIMEOUT_MS,
     passMinMoves: overrides.passMinMoves ?? env.KATAGO_PASS_MIN_MOVES,
     passScoreEpsilon: overrides.passScoreEpsilon ?? env.KATAGO_PASS_SCORE_EPSILON,
@@ -248,6 +282,8 @@ function selectBestMove({
   passMinMoves,
   passScoreEpsilon,
   passUtilityEpsilon,
+  endgameMinMoves,
+  endgameMaxEmptyPoints,
 }) {
   const allowedMoves = new Set(
     (query.allowMoves?.[0]?.moves || []).map((move) => normalizeEngineMove(move))
@@ -268,6 +304,8 @@ function selectBestMove({
     passMinMoves,
     passScoreEpsilon,
     passUtilityEpsilon,
+    endgameMinMoves,
+    endgameMaxEmptyPoints,
   });
   return preferredPass || bestMove;
 }
@@ -278,18 +316,27 @@ function maybePreferPass({
   passMinMoves,
   passScoreEpsilon,
   passUtilityEpsilon,
+  endgameMinMoves,
+  endgameMaxEmptyPoints,
 }) {
   const passMove = moveInfos.find((moveInfo) => normalizeEngineMove(moveInfo.move) === "PASS");
   const bestNonPassMove = moveInfos.find(
     (moveInfo) => normalizeEngineMove(moveInfo.move) !== "PASS"
   );
   const currentPlayer = toEngineColor(boardState?.currentPlayer) || "B";
+  const queryProfile = getQueryProfile({
+    boardState,
+    maxVisits: 1,
+    endgameMaxVisits: 1,
+    endgameMinMoves,
+    endgameMaxEmptyPoints,
+  });
 
   if (!passMove || !bestNonPassMove) {
     return null;
   }
 
-  if (getBoardMoveCount(boardState) < passMinMoves) {
+  if (queryProfile.moveCount < passMinMoves) {
     return null;
   }
 
@@ -301,12 +348,25 @@ function maybePreferPass({
     normalizeKataGoMetricForPlayer(bestNonPassMove.utility, currentPlayer),
     normalizeKataGoMetricForPlayer(passMove.utility, currentPlayer)
   );
+  const consecutivePasses = getConsecutivePassCount(boardState);
+  const scoreThreshold =
+    consecutivePasses > 0
+      ? Math.max(passScoreEpsilon, 3.0)
+      : queryProfile.inEndgame
+        ? Math.max(passScoreEpsilon, 2.25)
+        : passScoreEpsilon;
+  const utilityThreshold =
+    consecutivePasses > 0
+      ? Math.max(passUtilityEpsilon, 0.085)
+      : queryProfile.inEndgame
+        ? Math.max(passUtilityEpsilon, 0.06)
+        : passUtilityEpsilon;
 
-  if (scoreGap !== null && scoreGap <= passScoreEpsilon) {
+  if (scoreGap !== null && scoreGap <= scoreThreshold) {
     return passMove;
   }
 
-  if (utilityGap !== null && utilityGap <= passUtilityEpsilon) {
+  if (utilityGap !== null && utilityGap <= utilityThreshold) {
     return passMove;
   }
 
@@ -333,6 +393,7 @@ function createCompatibilityBoardState(moveSequence) {
 
   return {
     currentPlayer,
+    consecutivePasses: countTrailingPasses(moveSequence),
     moveSequence: moveSequence.map(([player, move]) => [
       player,
       move === "pass" ? "PASS" : move,
@@ -495,6 +556,94 @@ function getBoardMoveCount(boardState) {
   });
 
   return stones;
+}
+
+function getBoardEmptyPointCount(boardState) {
+  if (Number.isInteger(boardState?.emptyPoints) && boardState.emptyPoints >= 0) {
+    return boardState.emptyPoints;
+  }
+
+  if (!Array.isArray(boardState?.boardRows)) {
+    return null;
+  }
+
+  let emptyPoints = 0;
+
+  boardState.boardRows.forEach((rowLine) => {
+    if (typeof rowLine !== "string") {
+      return;
+    }
+
+    const match = rowLine.match(/:\s*([BW.]+)/i);
+    const line = match ? match[1].trim().toUpperCase() : "";
+
+    for (const point of line) {
+      if (point === ".") {
+        emptyPoints += 1;
+      }
+    }
+  });
+
+  return emptyPoints;
+}
+
+function getConsecutivePassCount(boardState) {
+  if (Number.isInteger(boardState?.consecutivePasses) && boardState.consecutivePasses >= 0) {
+    return boardState.consecutivePasses;
+  }
+
+  if (Array.isArray(boardState?.moveSequence) && boardState.moveSequence.length) {
+    return countTrailingPasses(boardState.moveSequence);
+  }
+
+  if (typeof boardState?.lastMove === "string" && /pass/i.test(boardState.lastMove)) {
+    return 1;
+  }
+
+  return 0;
+}
+
+function countTrailingPasses(moveSequence) {
+  if (!Array.isArray(moveSequence) || !moveSequence.length) {
+    return 0;
+  }
+
+  let consecutivePasses = 0;
+
+  for (let index = moveSequence.length - 1; index >= 0; index -= 1) {
+    const entry = moveSequence[index];
+    const rawMove = Array.isArray(entry) ? entry[1] : null;
+    const normalizedMove = normalizeEngineMove(rawMove);
+
+    if (normalizedMove !== "PASS") {
+      break;
+    }
+
+    consecutivePasses += 1;
+  }
+
+  return consecutivePasses;
+}
+
+function getQueryProfile({
+  boardState,
+  maxVisits,
+  endgameMaxVisits,
+  endgameMinMoves,
+  endgameMaxEmptyPoints,
+}) {
+  const moveCount = getBoardMoveCount(boardState);
+  const emptyPoints = getBoardEmptyPointCount(boardState);
+  const inEndgame =
+    moveCount >= endgameMinMoves ||
+    (Number.isInteger(emptyPoints) && emptyPoints <= endgameMaxEmptyPoints);
+
+  return {
+    moveCount,
+    emptyPoints,
+    inEndgame,
+    maxVisits: inEndgame ? Math.max(maxVisits, endgameMaxVisits) : maxVisits,
+  };
 }
 
 function toEngineColor(color) {

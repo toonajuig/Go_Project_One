@@ -24,9 +24,9 @@ test("browser smoke flows across local, pvp, and katago modes", async ({ page })
     await expect(page.locator("#playerColorSelect")).toHaveValue("black");
   });
 
-  await test.step("local heuristic mode", async () => {
+  await test.step("bot mode", async () => {
     await page.selectOption("#gameModeSelect", "local");
-    await expect(page.locator("#providerBadge")).toContainText("Player vs Local Heuristic");
+    await expect(page.locator("#providerBadge")).toContainText("Player vs Bot");
 
     await clickBoardCell(0);
     await expect.poll(async () => boardStones.count(), { timeout: 15000 }).toBeGreaterThanOrEqual(2);

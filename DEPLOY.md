@@ -87,6 +87,29 @@ docker build -t go-sensei-lab .
 docker run --rm -p 3000:3000 --env-file .env go-sensei-lab
 ```
 
+## Render Blueprint พร้อม KataGo
+
+ตอนนี้ repo มี `render.yaml` สำหรับ Render Blueprint แล้ว และตั้งค่าให้ Docker build ดาวน์โหลด Linux KataGo กับ model ระหว่าง build โดยอัตโนมัติ
+
+ค่าหลักที่ Blueprint ใช้:
+
+```env
+INSTALL_KATAGO=1
+BOARD_AI_PROVIDER=auto
+HEALTH_REQUIRE_BOARD_AI=katago
+KATAGO_PATH=/app/tools/katago/engine/katago
+KATAGO_MODEL=/app/tools/katago/models/kata1-zhizi-b28c512nbt-muonfd2.bin.gz
+KATAGO_CONFIG=/app/tools/katago/config/analysis_example.cfg
+KATAGO_DOWNLOAD_URL=https://github.com/lightvector/KataGo/releases/download/v1.16.4/katago-v1.16.4-eigen-linux-x64.zip
+KATAGO_MODEL_URL=https://media.katagotraining.org/uploaded/networks/models/kata1/kata1-zhizi-b28c512nbt-muonfd2.bin.gz
+```
+
+หมายเหตุ:
+
+- `HEALTH_REQUIRE_BOARD_AI=katago` จะทำให้ `/healthz` ตอบ `503` ถ้า KataGo ยังไม่พร้อม
+- ดังนั้น Render จะไม่มองว่า deploy สำเร็จ ถ้า image build ขึ้นแต่ KataGo start ไม่ได้จริง
+- ตอนนี้ blueprint ใช้ CPU build แบบ `eigen-linux-x64` เพื่อให้เข้ากับเครื่อง Linux ทั่วไปได้กว้างกว่าแบบ AVX2
+
 ## ถ้าอยากใช้ KataGo บนเว็บด้วย
 
 ทำได้ แต่ต้องเป็นโฮสต์ที่รัน native process ได้จริง เช่น VPS, Docker on VM, หรือ Node host ที่อนุญาตให้รัน binary ภายนอก

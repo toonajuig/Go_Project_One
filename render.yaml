@@ -7,9 +7,27 @@ services:
     dockerContext: .
     healthCheckPath: /healthz
     envVars:
+      - key: INSTALL_KATAGO
+        value: "1"
       - key: BOARD_AI_PROVIDER
-        value: local
+        value: auto
+      - key: HEALTH_REQUIRE_BOARD_AI
+        value: katago
       - key: BOARD_RULES
         value: chinese
       - key: BOARD_KOMI
         value: "5.5"
+      - key: KATAGO_PATH
+        value: /app/tools/katago/engine/katago
+      - key: KATAGO_MODEL
+        value: /app/tools/katago/models/kata1-zhizi-b28c512nbt-muonfd2.bin.gz
+      - key: KATAGO_CONFIG
+        value: /app/tools/katago/config/analysis_example.cfg
+      - key: KATAGO_DOWNLOAD_URL
+        value: https://github.com/lightvector/KataGo/releases/download/v1.16.4/katago-v1.16.4-eigen-linux-x64.zip
+      - key: KATAGO_MODEL_URL
+        value: https://media.katagotraining.org/uploaded/networks/models/kata1/kata1-zhizi-b28c512nbt-muonfd2.bin.gz
+      - key: KATAGO_MAX_VISITS
+        value: "120"
+      - key: KATAGO_TIMEOUT_MS
+        value: "20000"

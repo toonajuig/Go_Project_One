@@ -12,6 +12,9 @@ const port = Number(process.env.PORT || 3000);
 const requestedBoardAiProvider = normalizeBoardAiProvider(
   process.env.BOARD_AI_PROVIDER || "auto"
 );
+const healthRequiredBoardAiProvider = normalizeHealthRequiredBoardAiProvider(
+  process.env.HEALTH_REQUIRE_BOARD_AI
+);
 const boardRules = process.env.BOARD_RULES || "chinese";
 const boardKomi = parseFloatOr(process.env.BOARD_KOMI, 5.5);
 const kataGoMaxVisits = parsePositiveInt(process.env.KATAGO_MAX_VISITS, 300);
@@ -55,11 +58,13 @@ app.get("/styles.css", (_request, response) => {
 });
 
 app.get("/healthz", (_request, response) => {
-  response.json(createHealthPayload());
+  const payload = createHealthPayload();
+  response.status(payload.ok ? 200 : 503).json(payload);
 });
 
 app.get("/api/health", (_request, response) => {
-  response.json(createHealthPayload());
+  const payload = createHealthPayload();
+  response.status(payload.ok ? 200 : 503).json(payload);
 });
 
 app.get("/api/config", (_request, response) => {
@@ -158,12 +163,17 @@ function normalizeRole(role) {
 function createHealthPayload() {
   const boardAiStatus = getBoardAiAvailability();
   const kataGoStatus = kataGoEngine.getStatus();
+  const healthStatus = evaluateHealthStatus(boardAiStatus, kataGoStatus);
 
   return {
-    ok: true,
+    ok: healthStatus.ok,
     service: "go-sensei-lab",
     timestamp: new Date().toISOString(),
     uptimeSeconds: Math.round(process.uptime()),
+    health: {
+      requiredBoardAiProvider: healthRequiredBoardAiProvider,
+      failureReason: healthStatus.failureReason,
+    },
     chat: {
       remoteEnabled: false,
       provider: "local-fallback",
@@ -183,6 +193,38 @@ function createHealthPayload() {
         lastError: kataGoStatus.lastError,
       },
     },
+  };
+}
+
+function evaluateHealthStatus(boardAiStatus, kataGoStatus) {
+  if (healthRequiredBoardAiProvider === "katago") {
+    if (!kataGoStatus.configured) {
+      return {
+        ok: false,
+        failureReason: "KataGo is required for health checks but is not fully configured.",
+      };
+    }
+
+    if (!kataGoStatus.ready) {
+      return {
+        ok: false,
+        failureReason:
+          kataGoStatus.lastError || "KataGo is required for health checks but is not ready.",
+      };
+    }
+
+    if (!boardAiStatus.enabled || boardAiStatus.provider !== "katago") {
+      return {
+        ok: false,
+        failureReason:
+          "KataGo is required for health checks but is not the active board AI provider.",
+      };
+    }
+  }
+
+  return {
+    ok: true,
+    failureReason: null,
   };
 }
 
@@ -652,11 +694,16 @@ function extractFirstJsonObject(text) {
 function normalizeBoardAiProvider(value) {
   const normalized = String(value || "auto").trim().toLowerCase();
 
-  if (normalized === "katago" || normalized === "auto") {
+  if (normalized === "local" || normalized === "katago" || normalized === "auto") {
     return normalized;
   }
 
   return "auto";
+}
+
+function normalizeHealthRequiredBoardAiProvider(value) {
+  const normalized = String(value || "").trim().toLowerCase();
+  return normalized === "katago" ? "katago" : null;
 }
 
 function parseFloatOr(value, fallback) {

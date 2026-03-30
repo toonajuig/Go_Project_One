@@ -10,7 +10,8 @@
     "start": "node server.js",
     "dev": "node --watch server.js",
     "start:katago-adapter": "node katago-rest-adapter.js",
-    "dev:katago-adapter": "node --watch katago-rest-adapter.js"
+    "dev:katago-adapter": "node --watch katago-rest-adapter.js",
+    "train:heuristic": "node tools/train-local-vs-katago.js"
   },
   "dependencies": {
     "dotenv": "^17.2.3",

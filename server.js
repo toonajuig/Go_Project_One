@@ -3,6 +3,7 @@ import express from "express";
 import path from "path";
 import { fileURLToPath } from "url";
 import { KataGoAnalysisEngine } from "./katago-engine.js";
+import { createKataGoServiceFromEnv } from "./katago-service.js";
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -24,13 +25,17 @@ const kataGoPassUtilityEpsilon = parseNonNegativeFloat(
   process.env.KATAGO_PASS_UTILITY_EPSILON,
   0.035
 );
-const kataGoEngine = new KataGoAnalysisEngine({
-  executablePath: process.env.KATAGO_PATH,
-  modelPath: process.env.KATAGO_MODEL,
-  configPath: process.env.KATAGO_CONFIG,
-  defaultTimeoutMs: kataGoTimeoutMs,
+const kataGoService = createKataGoServiceFromEnv(process.env, {
+  boardRules,
+  boardKomi,
+  maxVisits: kataGoMaxVisits,
+  timeoutMs: kataGoTimeoutMs,
+  passMinMoves: kataGoPassMinMoves,
+  passScoreEpsilon: kataGoPassScoreEpsilon,
+  passUtilityEpsilon: kataGoPassUtilityEpsilon,
 });
-const kataGoLabel = createKataGoLabel(process.env.KATAGO_MODEL);
+const kataGoEngine = kataGoService.engine;
+const kataGoLabel = kataGoService.getLabel();
 
 await warmBoardAiProvider();
 
@@ -237,7 +242,7 @@ async function requestBoardMove({ boardState, legalMoves, playerColor }) {
   }
 
   if (provider.provider === "katago") {
-    return requestKataGoMove({ boardState, legalMoves, playerColor });
+    return kataGoService.requestMove({ boardState, legalMoves, playerColor });
   }
 
   throw new Error("Remote board AI provider is disabled on the server.");

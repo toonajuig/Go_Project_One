@@ -35,6 +35,14 @@
         </div>
 
         <div class="control-strip">
+          <label class="mode-picker" for="gameModeSelect">
+            <span>Mode</span>
+            <select id="gameModeSelect" class="mode-select">
+              <option value="katago">Play vs KataGo</option>
+              <option value="local">Play vs Local Heuristic</option>
+              <option value="pvp">Player vs Player</option>
+            </select>
+          </label>
           <button id="newGameButton" class="primary-button">New Game</button>
           <button id="passButton" class="secondary-button">Pass</button>
           <button id="undoButton" class="secondary-button">Undo</button>

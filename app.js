@@ -1,7 +1,6 @@
 (function () {
   const BOARD_SIZE = 9;
-  const HUMAN_COLOR = "black";
-  const AI_COLOR = "white";
+  const DEFAULT_HUMAN_COLOR = "black";
   const WHITE_KOMI = 5.5;
   const COLUMN_LABELS = ["A", "B", "C", "D", "E", "F", "G", "H", "J"];
   const STAR_POINTS = new Set([20, 24, 40, 56, 60]);
@@ -19,6 +18,7 @@
     modeBadge: document.getElementById("modeBadge"),
     providerBadge: document.getElementById("providerBadge"),
     gameModeSelect: document.getElementById("gameModeSelect"),
+    playerColorSelect: document.getElementById("playerColorSelect"),
     newGameButton: document.getElementById("newGameButton"),
     passButton: document.getElementById("passButton"),
     undoButton: document.getElementById("undoButton"),
@@ -48,13 +48,14 @@
     promptChips: Array.from(document.querySelectorAll(".prompt-chip")),
   };
 
-  let state = createInitialState();
+  let state = createInitialState(DEFAULT_HUMAN_COLOR);
   let aiThinking = false;
   let chatThinking = false;
   let aiTimer = null;
   let chatHistory = [];
   let stateHistory = [];
   let preferredGameMode = GAME_MODES.katago;
+  let preferredHumanColor = DEFAULT_HUMAN_COLOR;
   let currentGameMode = GAME_MODES.katago;
   let appConfig = {
     serverAvailable: false,
@@ -84,6 +85,19 @@
     return isKataGoAvailable() ? GAME_MODES.katago : GAME_MODES.local;
   }
 
+  function resolvePreferredHumanColor(color = preferredHumanColor) {
+    return color === "white" ? "white" : "black";
+  }
+
+  function syncPlayerColorControl() {
+    if (!dom.playerColorSelect) {
+      return;
+    }
+
+    dom.playerColorSelect.value = resolvePreferredHumanColor(preferredHumanColor);
+    dom.playerColorSelect.disabled = isPvPMode();
+  }
+
   function syncGameModeControl() {
     if (!dom.gameModeSelect) {
       return;
@@ -105,6 +119,7 @@
     preferredGameMode = mode;
     currentGameMode = resolveGameMode(mode);
     syncGameModeControl();
+    syncPlayerColorControl();
     return currentGameMode;
   }
 
@@ -117,7 +132,7 @@
   }
 
   function isPlayerControlledColor(color) {
-    return isPvPMode() || color === HUMAN_COLOR;
+    return isPvPMode() || color === state.humanColor;
   }
 
   function isPlayerTurn() {
@@ -167,29 +182,34 @@
       return `${getColorLabel(color)} player`;
     }
 
-    return color === HUMAN_COLOR ? "You" : getCurrentAiLabel();
+    return color === state.humanColor ? "You" : getCurrentAiLabel();
   }
 
   function getNewGameStatusText() {
+    const humanColor = resolvePreferredHumanColor(preferredHumanColor);
+    const aiColor = otherColor(humanColor);
+
     if (isPvPMode()) {
       return "New Player vs Player game started. Black moves first.";
     }
 
     if (isKataGoMode() && isKataGoAvailable()) {
-      return "New game started against KataGo. You play Black and KataGo plays White.";
+      return `New game started against KataGo. You play ${getColorLabel(humanColor)} and KataGo plays ${getColorLabel(aiColor)}.`;
     }
 
-    return "New game started against the local heuristic engine. You play Black and White is automated.";
+    return `New game started against the local heuristic engine. You play ${getColorLabel(humanColor)} and ${getColorLabel(aiColor)} is automated.`;
   }
 
-  function createInitialState() {
+  function createInitialState(humanColor = preferredHumanColor) {
+    const resolvedHumanColor = resolvePreferredHumanColor(humanColor);
+    const aiColor = otherColor(resolvedHumanColor);
     const board = Array(BOARD_SIZE * BOARD_SIZE).fill(null);
     return {
       size: BOARD_SIZE,
       board,
-      currentPlayer: HUMAN_COLOR,
-      humanColor: HUMAN_COLOR,
-      aiColor: AI_COLOR,
+      currentPlayer: "black",
+      humanColor: resolvedHumanColor,
+      aiColor,
       captures: { black: 0, white: 0 },
       turn: 1,
       boardHash: hashBoard(board),
@@ -2046,6 +2066,10 @@
 
       state.recommendedMove = suggestion.index;
       renderBoard();
+      const replyColorLabel = getColorLabel(state.aiColor);
+      return {
+        text: `${suggestion.explanation}\nTry ${suggestion.coord} and watch how ${replyColorLabel} responds.`,
+      };
       return {
         text: `${suggestion.explanation}\nลองวางที่ ${suggestion.coord} แล้วดูว่าขาวจะตอบอย่างไร`,
       };
@@ -2335,6 +2359,10 @@
 
     updateStatusNote(message);
     addChatMessage("system", message, "Undo");
+
+    if (isAiTurn()) {
+      scheduleAiTurn();
+    }
   }
 
   function handleDeadStoneToggle(index) {
@@ -2640,6 +2668,10 @@
       ? "Black and White are player-controlled"
       : "You: Black • AI: White";
 
+    if (!isPvPMode()) {
+      dom.playerSeatBadge.textContent = `You: ${getColorLabel(state.humanColor)} • AI: ${getColorLabel(state.aiColor)}`;
+    }
+
     if (state.gameOver) {
       dom.modeBadge.textContent = "Game finished";
     } else if (state.scoring?.active) {
@@ -2736,7 +2768,7 @@
     const estimateInfo = describeEstimate(state);
     const scoring = state.scoring?.active ? analyzeScoring(state) : null;
     const latest = state.lastMove;
-    const currentTurnText = state.gameOver
+    let currentTurnText = state.gameOver
       ? state.winnerText
       : aiThinking
         ? `${getCurrentAiLabel()} is thinking...`
@@ -2745,6 +2777,12 @@
           : isPlayerTurn()
             ? "Your move (Black)"
             : `${getCurrentAiLabel()} to move`;
+
+    if (!isPvPMode() && !state.gameOver && !aiThinking) {
+      currentTurnText = isPlayerTurn()
+        ? `Your move (${getColorLabel(state.humanColor)})`
+        : `${getCurrentAiLabel()} to move (${getColorLabel(state.aiColor)})`;
+    }
 
     dom.turnStatus.textContent = state.scoring?.active
       ? state.gameOver
@@ -3024,11 +3062,14 @@
     const playMessage = isPvPMode()
       ? `Play mode is ${getPlayModeLabel()}. Ask AI will use ${getCoachLabel()} as the coach.`
       : `Play mode is ${getPlayModeLabel()}. White is controlled by ${getCurrentAiLabel()}.`;
+    const resolvedPlayMessage = isPvPMode()
+      ? playMessage
+      : `Play mode is ${getPlayModeLabel()}. ${getColorLabel(state.aiColor)} is controlled by ${getCurrentAiLabel()}.`;
     const chatMessage = appConfig.chatApiEnabled
       ? `Chat is connected to ${appConfig.model || "Remote AI"}.`
       : "Chat is using the local fallback coach.";
 
-    addChatMessage("system", `${playMessage} ${chatMessage}`, "Mode");
+    addChatMessage("system", `${resolvedPlayMessage} ${chatMessage}`, "Mode");
   }
 
   async function fetchServerConfig() {
@@ -3196,11 +3237,15 @@
     aiTimer = null;
     aiThinking = false;
     stateHistory = [];
-    state = createInitialState();
+    state = createInitialState(preferredHumanColor);
     resetChat();
     announceChatMode();
     updateStatusNote(getNewGameStatusText());
     render();
+
+    if (isAiTurn()) {
+      scheduleAiTurn();
+    }
   }
 
   function handleGameModeChange() {
@@ -3212,6 +3257,27 @@
       requestedMode === GAME_MODES.katago && resolvedMode !== GAME_MODES.katago
         ? "KataGo is not available right now, so a new game started in Local Heuristic mode instead."
         : `New game started in ${getPlayModeLabel()}.`;
+
+    updateStatusNote(message);
+    addChatMessage("system", message, "Mode");
+    render();
+  }
+
+  function handlePlayerColorChange() {
+    preferredHumanColor = resolvePreferredHumanColor(
+      dom.playerColorSelect?.value || DEFAULT_HUMAN_COLOR
+    );
+    syncPlayerColorControl();
+
+    if (isPvPMode()) {
+      return;
+    }
+
+    startNewGame();
+
+    const message = `New game started in ${getPlayModeLabel()}. You play ${getColorLabel(
+      state.humanColor
+    )} and ${getCurrentAiLabel()} plays ${getColorLabel(state.aiColor)}.`;
 
     updateStatusNote(message);
     addChatMessage("system", message, "Mode");
@@ -3233,6 +3299,9 @@
     dom.newGameButton.addEventListener("click", startNewGame);
     if (dom.gameModeSelect) {
       dom.gameModeSelect.addEventListener("change", handleGameModeChange);
+    }
+    if (dom.playerColorSelect) {
+      dom.playerColorSelect.addEventListener("change", handlePlayerColorChange);
     }
     dom.passButton.addEventListener("click", handlePass);
     dom.undoButton.addEventListener("click", handleUndo);

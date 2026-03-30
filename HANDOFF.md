@@ -1,182 +1,248 @@
 # Handoff
 
-Updated: 2026-03-30
+Updated: 2026-03-31
 
 ## Current status
 
 - Branch: `main`
-- Tracking: `main...origin/main`
-- Working tree is still dirty
-- Files actively changed this round:
-  - `app.js`
-  - `local-heuristic-engine.js`
-  - `HANDOFF.md`
-- Other modified/untracked files already in the tree:
-  - `index.html`
-  - `styles.css`
-  - `package.json`
-  - `tools/train-local-vs-katago.js`
+- Remote: `origin/main`
+- Latest pushed commit before this round: `153309a` `Fix KataGo startup in Render containers`
+- Current round adds a stronger Render KataGo profile plus selectable Black/White seats in the browser UI
+- The project now has a Render Blueprint and can deploy with server-side KataGo on Render
+- The current Render deployment is intentionally tuned for stability on a small/free instance, so KataGo strength is noticeably reduced
 
-## What changed this round
+## Important recent commits
 
-### 1. Life-and-death heuristic upgrade
+- `c9ed675` `Clean up app flow and add browser smoke test`
+- `f74287d` `Add KataGo service wiring and mode selector`
+- `fda2266` `Add KataGo adapter setup and WSL helper tools`
+- `5ce8d56` `Add heuristic training engine and handoff notes`
+- `e624df4` `Add Render blueprint for Docker deploy`
+- `9915f1c` `Add Render KataGo deployment support`
+- `cc6f658` `Tune Render KataGo for smaller instances`
+- `153309a` `Fix KataGo startup in Render containers`
 
-- Added group life analysis to `local-heuristic-engine.js`
-- Added eye-related concepts:
-  - `eyeCount`
-  - `eyePotential`
-  - `falseEyeCount`
-  - status buckets: `alive`, `stable`, `unsettled`, `critical`, `dead`
-- Added move metrics:
-  - `eyeBonus`
-  - `lifeDeathBonus`
-  - `cleanupPressurePenalty`
-  - `futileDefensePenalty`
-- Integrated those signals into:
-  - board evaluation
-  - urgent-move collection
-  - static move ranking
-  - search candidate selection
-  - pass logic
+## What changed after the earlier heuristic work
 
-### 2. Browser heuristic synced
+### 1. Browser app cleanup and verification
 
-- Mirrored the same logic into the active implementation near the bottom of `app.js`
-- `node --check app.js` passes after sync
-- Later cleaned up `app.js` so the active path now uses one canonical implementation instead of duplicate legacy declarations
+- `app.js` was cleaned up so the active browser flow uses one canonical implementation
+- Restored the missing chat submit handler after cleanup
+- Fixed the hidden scoring panel CSS regression
+- Added browser smoke coverage in `tools/verify-browser-flow.spec.js`
 
-### 3. Reproduced screenshot bug and fixed it
+Verified:
 
-Two user-reported local-heuristic mistakes were reproduced from screenshot positions:
-
-1. A dead group was still being chased in endgame
-- Symptom: local heuristic kept playing cleanup moves on stones that were already dead
-- Fixes:
-  - dead/already-lost groups now get reduced urgency
-  - cleanup chasing now has explicit penalty
-  - pass logic now checks unresolved life/death before deciding to continue or stop
-
-2. Local heuristic chose `J6` then `J4` instead of taking `B6`
-- Reproduced locally from the board in the screenshot
-- Before fix:
-  - static rank liked `B6`
-  - deeper search still drifted to `J6` / `J4`
-- Root cause:
-  - right-side white group was being treated as too urgent
-  - search could over-prefer soft territorial/shape moves over obvious tactical captures
-- Fixes:
-  - group life analysis now considers a "runway" / large shared external liberty region before labeling some groups as `critical`
-  - added tactical override in `chooseStrategicMove` so a clearly stronger capture is not skipped by a soft search preference
-- After fix:
-  - both "before J6" and "before J4" scenarios now choose `B6`
-
-## Key implementation notes
-
-### `local-heuristic-engine.js`
-
-- `analyzeGroupLife(...)`
-  - now tracks external region information:
-    - `externalRegionCount`
-    - `maxExternalRegionSize`
-    - `sharedLibertySpan`
-  - uses `strongRunway` to avoid overcalling some flexible groups as `critical`
-- `chooseStrategicMove(...)`
-  - now includes `findTacticalOverrideMove(...)`
-  - uses tactical override after search to keep obvious captures from being discarded
-
-### `app.js`
-
-- Duplicate legacy declarations were removed after the heuristic sync
-- The current browser flow now uses one canonical implementation for rendering, move suggestions, scoring, and game mode handling
-
-## Verification already done
-
-- `node --check local-heuristic-engine.js`
 - `node --check app.js`
-- Reproduced and checked screenshot scenarios with inline Node scripts
+- `node --check server.js`
 - `npx playwright test tools/verify-browser-flow.spec.js --reporter=line`
-- Ran short training batches:
+
+### 2. Render Blueprint support
+
+Added Docker-based Render deployment support:
+
+- `render.yaml`
+- `Dockerfile`
+- `DEPLOY.md`
+- `.env.example`
+
+Key behavior:
+
+- Render builds the Docker image
+- The image downloads Linux KataGo plus model during build
+- Render health checks require KataGo to be ready, not just the Node server
+
+### 3. Render KataGo startup bug and fix
+
+Initial Render logs showed KataGo failing at startup with messages like:
+
+- `fuse: device not found, try 'modprobe fuse' first`
+- `Failed to parse stdout JSON`
+- `KataGo exited during startup (code 127, signal null)`
+
+Root cause:
+
+- The Linux KataGo release artifact behaves as an AppImage
+- In Render containers, FUSE is not available
+
+Fix:
+
+- `katago-engine.js` now sets `APPIMAGE_EXTRACT_AND_RUN=1` when spawning KataGo on Linux
+- `Dockerfile` also sets `ENV APPIMAGE_EXTRACT_AND_RUN=1`
+
+Result:
+
+- Linux/WSL smoke tests confirmed KataGo can now boot and answer an `analysis` request under the same AppImage mode
+
+### 4. Stronger Render KataGo profile and selectable player seat
+
+This round added two user-facing improvements:
+
+- Render KataGo was tuned upward for stronger play while staying below the earlier failure profile
+- The browser UI now lets the player choose `Black` or `White` when playing against KataGo or the local heuristic
+
+Files touched:
+
+- `app.js`
+- `index.html`
+- `render.yaml`
+- `tools/katago/config/render_analysis.cfg`
+- `tools/verify-browser-flow.spec.js`
+
+Behavior changes:
+
+- New seat selector in the UI for AI modes
+- If the player chooses White, the AI now correctly opens the game as Black
+- Browser status text and session labels now reflect the chosen side
+- Browser smoke test now covers the White-seat flow
+
+## Current Render KataGo config
+
+Render currently uses a lightweight config file:
+
+- `tools/katago/config/render_analysis.cfg`
+
+Current values:
+
+- `maxVisits = 160`
+- `wideRootNoise = 0.0`
+- `numAnalysisThreads = 1`
+- `numSearchThreadsPerAnalysisThread = 4`
+- `nnMaxBatchSize = 4`
+- `nnCacheSizePowerOfTwo = 17`
+- `nnMutexPoolSizePowerOfTwo = 13`
+
+Render environment values in `render.yaml`:
+
+- `BOARD_AI_PROVIDER=auto`
+- `HEALTH_REQUIRE_BOARD_AI=katago`
+- `KATAGO_CONFIG=/app/tools/katago/config/render_analysis.cfg`
+- `KATAGO_MAX_VISITS=160`
+- `KATAGO_TIMEOUT_MS=45000`
+
+## Why deployed KataGo feels weak
+
+The deployed KataGo is not weak because of the model itself.
+
+It feels weak because it was deliberately throttled so it could survive Render startup and run on a small CPU-only instance:
+
+- visits were reduced a lot
+- search threads were reduced a lot
+- cache and batching were reduced a lot
+- the config was tuned for reliability first, not playing strength
+
+This was done after Render startup problems, so the current deployment favors:
+
+- boot reliability
+- lower memory pressure
+- lower CPU pressure
+
+at the cost of:
+
+- shallower reading
+- weaker tactical accuracy
+- more human-visible mistakes
+
+## Recommended next steps for the next round
+
+### First thing to verify
+
+Redeploy Render with the stronger profile and watch whether the service still boots cleanly on the free/small instance.
+
+Specifically check:
+
+- whether startup still passes health checks
+- whether move latency is still acceptable
+- whether logs show memory pressure or timeouts
+
+### Option A: Another balanced strength increase
+
+If the current stronger profile is still stable, try another moderate bump:
+
+- add `wideRootNoise = 0.0`
+- raise `maxVisits` to around `160`
+- raise `numSearchThreadsPerAnalysisThread` to around `4`
+- raise `KATAGO_TIMEOUT_MS` to around `45000`
+
+Expected result:
+
+- noticeably stronger play
+- still has a reasonable chance to survive on Render
+
+### Option B: Stronger but riskier on Render free
+
+Push closer to local strength:
+
+- higher visits again
+- more threads
+- larger cache
+- potentially revert toward `analysis_example.cfg`
+
+Expected result:
+
+- stronger play
+- higher risk of slow startup, timeout, or memory pressure on Render free
+
+### Option C: Better hosting for stronger KataGo
+
+If strong KataGo is the priority, the cleaner solution is a stronger runtime:
+
+- upgrade the Render instance
+- or deploy on a host with more CPU/RAM
+
+This is likely the most reliable path if we want substantially better strength without constantly fighting resource limits.
+
+## Files most relevant next round
+
+- `render.yaml`
+- `Dockerfile`
+- `katago-engine.js`
+- `server.js`
+- `tools/katago/config/render_analysis.cfg`
+- `tools/katago/config/analysis_example.cfg`
+- `DEPLOY.md`
+
+## Useful checks next round
+
+Check local git state:
 
 ```bash
-npm.cmd run train:heuristic -- --games 2 --max-moves 16 --max-visits 40 --keep-examples 6
+git status --short --branch
+git log --oneline -n 8
 ```
 
-Latest short-run logs:
+Check syntax:
 
-```text
-analysis_logs/heuristic-vs-katago-20260330-135954.json
-analysis_logs/heuristic-vs-katago-20260330-140111.json
+```bash
+node --check server.js
+node --check katago-engine.js
 ```
 
-Latest short-run result from `heuristic-vs-katago-20260330-140111.json`:
-
-- strict agreement: `18.8%`
-- relaxed agreement: `37.5%`
-- strongest mismatch signals:
-  - `board evaluation`
-  - `life-and-death swing`
-  - `defense urgency`
-  - `enemy pressure`
-  - `liberty swing`
-  - `cleanup chase penalty`
-
-Interpretation:
-- life/death logic is now affecting decisions in the intended direction
-- but its weight is still likely too strong in some positions
-- `boardDelta` is also still dominating too much
-
-## Important caveats
-
-- Heuristic tuning is still incomplete even after the life-and-death upgrade
-- The latest short runs still suggest `boardDelta`, `lifeDeathBonus`, and defense pressure can dominate too much in some positions
-- Reproducible regression fixtures for the screenshot positions have still not been added yet
-
-## Suggested next steps
-
-1. Continue heuristic tuning
-- Focus next on reducing over-bias from:
-  - `boardDelta`
-  - `lifeDeathBonus`
-  - `defenseUrgencyBonus`
-- A good next pass is to stage-weight those even more toward late endgame only
-
-2. Add reproducible regression cases
-- Save the two screenshot positions as code fixtures or small JSON snapshots
-- Add a script/test that asserts expected top move or selected move
-- This will prevent the same bug from coming back during tuning
-
-3. Expand training coverage
-- Run longer batches once you are happy with the current weights
-- Compare agreement rate changes before and after each heuristic adjustment
-
-## Useful commands for next round
-
-Run app:
+Run local server:
 
 ```bash
 npm.cmd start
 ```
 
-Run dev mode:
+Check deployed service:
 
-```bash
-npm.cmd run dev
+```text
+/healthz
+/api/health
+/api/config
 ```
 
-Run training:
+Look for these Render log signals:
 
-```bash
-npm.cmd run train:heuristic -- --games 8 --max-moves 20 --max-visits 80
-```
+- `KataGo analysis engine is ready`
+- `Board AI ready via KataGo ...`
+- `fuse: device not found`
+- `Failed to parse stdout JSON`
+- `KataGo exited during startup`
+- `OOM`
+- health check failures
 
-Check git state:
+## User preference noted
 
-```bash
-git status --short --branch
-git log --oneline -n 5
-```
-
-## Latest known base commits
-
-- `7156314` Remove OpenAI integration and API key references
-- `e597d3b` Prepare Render deployment
+- Current round already includes one moderate strength increase for Render KataGo
+- If further tuning is needed, do it incrementally and verify Render stability after each bump

@@ -21,6 +21,7 @@ test("browser smoke flows across local, pvp, and katago modes", async ({ page })
   await test.step("initial page load", async () => {
     await waitForBoardReady();
     await expect(page.locator("#providerBadge")).toContainText("Play:");
+    await expect(page.locator("#playerColorSelect")).toHaveValue("black");
   });
 
   await test.step("local heuristic mode", async () => {
@@ -38,11 +39,17 @@ test("browser smoke flows across local, pvp, and katago modes", async ({ page })
 
     await page.click("#undoButton");
     await expect.poll(async () => boardStones.count(), { timeout: 10000 }).toBe(0);
+
+    await page.selectOption("#playerColorSelect", "white");
+    await expect(page.locator("#playerSeatBadge")).toContainText("White");
+    await expect.poll(async () => boardStones.count(), { timeout: 20000 }).toBeGreaterThanOrEqual(1);
+    await expect(page.locator("#turnStatus")).toContainText("Your move");
   });
 
   await test.step("player vs player mode", async () => {
     await page.selectOption("#gameModeSelect", "pvp");
     await expect(page.locator("#providerBadge")).toContainText("Player vs Player");
+    await expect(page.locator("#playerColorSelect")).toBeDisabled();
 
     await clickBoardCell(0);
     await clickBoardCell(10);
@@ -68,10 +75,11 @@ test("browser smoke flows across local, pvp, and katago modes", async ({ page })
     test.skip(!katagoAvailable, "KataGo mode is unavailable in this environment.");
 
     await page.selectOption("#gameModeSelect", "katago");
+    await page.selectOption("#playerColorSelect", "white");
     await expect(page.locator("#providerBadge")).toContainText("Player vs KataGo");
+    await expect(page.locator("#playerSeatBadge")).toContainText("White");
 
-    await clickBoardCell(0);
-    await expect.poll(async () => boardStones.count(), { timeout: 20000 }).toBeGreaterThanOrEqual(2);
+    await expect.poll(async () => boardStones.count(), { timeout: 30000 }).toBeGreaterThanOrEqual(1);
     await expect(page.locator("#turnStatus")).toContainText("Your move");
 
     await page.click("#suggestionButton");
